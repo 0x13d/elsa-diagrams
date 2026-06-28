@@ -1,0 +1,65 @@
+{
+  "activities": [
+    {
+      "$id": "1",
+      "activityId": "activity-1",
+      "type": "HttpEndpoint",
+      "displayName": "HTTP Endpoint",
+      "persistWorkflow": false,
+      "loadWorkflowContext": false,
+      "saveWorkflowContext": false,
+      "properties": [
+        {
+          "name": "Path",
+          "expressions": { "Literal": "/document" },
+          "syntax": "Literal"
+        }
+      ],
+      "propertyStorageProviders": {}
+    },
+    {
+      "$id": "2",
+      "activityId": "activity-2",
+      "type": "If",
+      "displayName": "Check Status",
+      "properties": [],
+      "propertyStorageProviders": {}
+    },
+    {
+      "$id": "3",
+      "activityId": "activity-3",
+      "type": "SendEmail",
+      "displayName": "Notify Approver",
+      "properties": [],
+      "propertyStorageProviders": {}
+    },
+    {
+      "$id": "4",
+      "activityId": "activity-4",
+      "type": "HttpResponse",
+      "displayName": "Reject Response",
+      "properties": [],
+      "propertyStorageProviders": {}
+    }
+  ],
+  "connections": [
+    {
+      "$id": "10",
+      "sourceActivityId": "activity-1",
+      "targetActivityId": "activity-2",
+      "outcome": "Done"
+    },
+    {
+      "$id": "11",
+      "sourceActivityId": "activity-2",
+      "targetActivityId": "activity-3",
+      "outcome": "True"
+    },
+    {
+      "$id": "12",
+      "sourceActivityId": "activity-2",
+      "targetActivityId": "activity-4",
+      "outcome": "False"
+    }
+  ]
+}

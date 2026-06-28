@@ -1,0 +1,20 @@
+[package]
+name = "elsa-mermaid-cli"
+description = "Command-line tool that converts Elsa Workflow JSON (v2.x and v3+) into Mermaid flowchart diagrams."
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "../../README.md"
+
+[[bin]]
+name = "elsa-to-mermaid"
+path = "src/main.rs"
+
+[dependencies]
+elsa_mermaid = { version = "0.4.0", path = "../elsa_mermaid" }
+clap = { version = "4", features = ["derive"] }

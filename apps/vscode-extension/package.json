@@ -1,0 +1,123 @@
+{
+  "name": "elsa-to-mermaid",
+  "displayName": "Elsa to Mermaid",
+  "description": "Preview Elsa Workflow JSON definitions (v2.x and v3+) as Mermaid flowchart diagrams, side by side with the editor.",
+  "version": "0.4.0",
+  "publisher": "0x13d",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "author": "Ari Ugwu <ari@thirteendelta.com>",
+  "homepage": "https://github.com/0x13d/elsa-diagrams#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0x13d/elsa-diagrams.git",
+    "directory": "apps/vscode-extension"
+  },
+  "bugs": {
+    "url": "https://github.com/0x13d/elsa-diagrams/issues"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "elsa",
+    "workflow",
+    "mermaid",
+    "flowchart",
+    "diagram"
+  ],
+  "icon": "media/icon.png",
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:json"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "elsaToMermaid.openPreview",
+        "title": "Open Mermaid Preview",
+        "category": "Elsa to Mermaid",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "elsaToMermaid.openPreviewToSide",
+        "title": "Open Mermaid Preview to the Side",
+        "category": "Elsa to Mermaid",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "elsaToMermaid.exportToMarkdown",
+        "title": "Export to Markdown (.md)",
+        "category": "Elsa to Mermaid"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "when": "elsaToMermaid.isWorkflowJson",
+          "command": "elsaToMermaid.openPreviewToSide",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "elsaToMermaid.openPreview",
+          "when": "editorLangId == json"
+        },
+        {
+          "command": "elsaToMermaid.openPreviewToSide",
+          "when": "editorLangId == json"
+        },
+        {
+          "command": "elsaToMermaid.exportToMarkdown",
+          "when": "editorLangId == json"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Elsa to Mermaid",
+      "properties": {
+        "elsaToMermaid.defaultDirection": {
+          "type": "string",
+          "enum": [
+            "TD",
+            "LR",
+            "BT",
+            "RL"
+          ],
+          "default": "TD",
+          "description": "Default flowchart direction for the preview."
+        },
+        "elsaToMermaid.previewDebounceMs": {
+          "type": "number",
+          "default": 200,
+          "minimum": 0,
+          "maximum": 2000,
+          "description": "Milliseconds to debounce preview updates while editing."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build:wasm": "node scripts/copy-wasm.mjs",
+    "build:extension": "node esbuild.config.mjs",
+    "build:webview": "node esbuild.config.mjs --webview",
+    "build": "npm run build:wasm && npm run build:extension && npm run build:webview",
+    "watch": "node esbuild.config.mjs --watch",
+    "package": "npm run build && vsce package --no-dependencies",
+    "vscode:prepublish": "npm run build"
+  },
+  "dependencies": {
+    "mermaid": "^11.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.3"
+  }
+}

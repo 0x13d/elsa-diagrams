@@ -1,0 +1,111 @@
+{
+  "id": "workflow-c-audit",
+  "definitionId": "workflow-c-audit",
+  "name": "Workflow C — Audit",
+  "version": 1,
+  "isPublished": true,
+  "isLatest": true,
+  "inputs": [
+    {
+      "name": "source",
+      "type": "string",
+      "description": "Identifier of the calling workflow (definitionId or name)."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "description": "ok | failed | partial — outcome from the caller's perspective."
+    },
+    {
+      "name": "error",
+      "type": "string",
+      "description": "Optional. Failure reason when status != 'ok'."
+    },
+    {
+      "name": "count",
+      "type": "number",
+      "description": "Optional. Records processed."
+    },
+    {
+      "name": "ref",
+      "type": "string",
+      "description": "Optional. Caller-supplied correlation handle (filename, URL, id)."
+    }
+  ],
+  "outputs": [
+    { "name": "auditReport", "type": "object" }
+  ],
+  "root": {
+    "id": "Flowchart1",
+    "type": "Elsa.Flowchart",
+    "activities": [
+      {
+        "id": "Start1",
+        "type": "Elsa.Start",
+        "displayName": "Start (Audit)",
+        "description": "Subworkflow entry. Reads the standard audit envelope from the caller."
+      },
+      {
+        "id": "Build1",
+        "type": "Elsa.Primitives.Transform",
+        "displayName": "Build audit report",
+        "description": "Normalizes caller input into the canonical Audit Report shape (see ADR-0001).",
+        "properties": {
+          "Expression": {
+            "type": "JavaScript",
+            "value": "({ runId: workflow.instanceId, source: input.source, status: input.status, error: input.error ?? null, count: input.count ?? null, ref: input.ref ?? null, observedAt: new Date().toISOString() })"
+          },
+          "Output": { "type": "Literal", "value": "auditReport" }
+        }
+      },
+      {
+        "id": "If1",
+        "type": "Elsa.If",
+        "displayName": "Failed run?",
+        "properties": {
+          "Condition": { "type": "JavaScript", "value": "auditReport.status !== 'ok'" }
+        }
+      },
+      {
+        "id": "Alert1",
+        "type": "Elsa.Notifications.PublishEvent",
+        "displayName": "Page on failure",
+        "properties": {
+          "Topic": { "type": "Literal", "value": "audit.workflow.failed" },
+          "Payload": { "type": "JavaScript", "value": "auditReport" }
+        }
+      },
+      {
+        "id": "WriteLog1",
+        "type": "Elsa.Data.WriteRecord",
+        "displayName": "Append to audit log",
+        "properties": {
+          "Store": { "type": "Literal", "value": "audit_log" },
+          "Record": { "type": "JavaScript", "value": "auditReport" }
+        }
+      },
+      {
+        "id": "SetOut1",
+        "type": "Elsa.Primitives.SetOutput",
+        "displayName": "Emit report",
+        "properties": {
+          "Outputs": { "type": "JavaScript", "value": "{ auditReport }" }
+        }
+      },
+      {
+        "id": "Finish1",
+        "type": "Elsa.Finish",
+        "displayName": "Return"
+      }
+    ],
+    "connections": [
+      { "source": "Start1", "target": "Build1", "sourcePort": "Done", "targetPort": "In" },
+      { "source": "Build1", "target": "If1", "sourcePort": "Done", "targetPort": "In" },
+      { "source": "If1", "target": "Alert1", "sourcePort": "True", "targetPort": "In" },
+      { "source": "If1", "target": "WriteLog1", "sourcePort": "False", "targetPort": "In" },
+      { "source": "Alert1", "target": "WriteLog1", "sourcePort": "Done", "targetPort": "In" },
+      { "source": "WriteLog1", "target": "SetOut1", "sourcePort": "Done", "targetPort": "In" },
+      { "source": "SetOut1", "target": "Finish1", "sourcePort": "Done", "targetPort": "In" }
+    ]
+  }
+}

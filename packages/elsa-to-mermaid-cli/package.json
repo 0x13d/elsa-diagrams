@@ -1,0 +1,42 @@
+{
+  "name": "elsa-to-mermaid-cli",
+  "version": "0.4.0",
+  "description": "Cross-platform CLI for converting Elsa Workflow JSON (v2.x and v3+) into Mermaid flowchart diagrams. Ships a native Rust binary per platform.",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "author": "Ari Ugwu <ari@thirteendelta.com>",
+  "homepage": "https://github.com/0x13d/elsa-diagrams#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0x13d/elsa-diagrams.git",
+    "directory": "packages/elsa-to-mermaid-cli"
+  },
+  "bugs": {
+    "url": "https://github.com/0x13d/elsa-diagrams/issues"
+  },
+  "keywords": [
+    "elsa",
+    "elsa-workflows",
+    "workflow",
+    "mermaid",
+    "flowchart",
+    "cli"
+  ],
+  "bin": {
+    "elsa-to-mermaid": "bin/elsa-to-mermaid.js"
+  },
+  "files": [
+    "bin",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "optionalDependencies": {
+    "elsa-to-mermaid-cli-darwin-x64": "0.4.0",
+    "elsa-to-mermaid-cli-darwin-arm64": "0.4.0",
+    "elsa-to-mermaid-cli-linux-x64-gnu": "0.4.0",
+    "elsa-to-mermaid-cli-linux-arm64-gnu": "0.4.0",
+    "elsa-to-mermaid-cli-win32-x64-msvc": "0.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

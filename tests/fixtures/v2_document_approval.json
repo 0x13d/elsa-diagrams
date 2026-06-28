@@ -1,0 +1,77 @@
+{
+  "id": "doc-approval",
+  "definitionId": "doc-approval",
+  "name": "Document Approval",
+  "version": 1,
+  "activities": [
+    {
+      "$id": "1",
+      "activityId": "activity-1",
+      "type": "HttpEndpoint",
+      "displayName": "Receive Document",
+      "persistWorkflow": false,
+      "loadWorkflowContext": false,
+      "saveWorkflowContext": false,
+      "properties": [],
+      "propertyStorageProviders": {}
+    },
+    {
+      "$id": "2",
+      "activityId": "activity-2",
+      "type": "If",
+      "displayName": "Check Approval",
+      "properties": [],
+      "propertyStorageProviders": {}
+    },
+    {
+      "$id": "3",
+      "activityId": "activity-3",
+      "type": "SendEmail",
+      "displayName": "Notify Approver",
+      "properties": [],
+      "propertyStorageProviders": {}
+    },
+    {
+      "$id": "4",
+      "activityId": "activity-4",
+      "type": "SendSignal",
+      "displayName": "Send Approved Signal",
+      "properties": [],
+      "propertyStorageProviders": {}
+    },
+    {
+      "$id": "5",
+      "activityId": "activity-5",
+      "type": "HttpResponse",
+      "displayName": "Reject Response",
+      "properties": [],
+      "propertyStorageProviders": {}
+    }
+  ],
+  "connections": [
+    {
+      "$id": "10",
+      "sourceActivityId": "activity-1",
+      "targetActivityId": "activity-2",
+      "outcome": "Done"
+    },
+    {
+      "$id": "11",
+      "sourceActivityId": "activity-2",
+      "targetActivityId": "activity-3",
+      "outcome": "True"
+    },
+    {
+      "$id": "12",
+      "sourceActivityId": "activity-3",
+      "targetActivityId": "activity-4",
+      "outcome": "Done"
+    },
+    {
+      "$id": "13",
+      "sourceActivityId": "activity-2",
+      "targetActivityId": "activity-5",
+      "outcome": "False"
+    }
+  ]
+}

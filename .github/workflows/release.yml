@@ -1,0 +1,331 @@
+name: release
+
+# Triggered when a vX.Y.Z tag is pushed. All publishable surfaces share the
+# tag's version (Cargo workspace, both npm packages, VS Code extension).
+# Run `node scripts/bump-version.mjs X.Y.Z` first to keep them aligned, then
+# commit + tag + push.
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Skip publish steps (build + package only)'
+        type: boolean
+        default: true
+
+env:
+  DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # CLI: native binary per platform → uploaded as an artifact per platform.
+  # ---------------------------------------------------------------------------
+  build-cli:
+    name: cli (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-13,     target: x86_64-apple-darwin,       platform: darwin-x64,      ext: '',     use_cross: 'false' }
+          - { os: macos-14,     target: aarch64-apple-darwin,      platform: darwin-arm64,    ext: '',     use_cross: 'false' }
+          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu,  platform: linux-x64-gnu,   ext: '',     use_cross: 'false' }
+          - { os: ubuntu-22.04, target: aarch64-unknown-linux-gnu, platform: linux-arm64-gnu, ext: '',     use_cross: 'true'  }
+          - { os: windows-2022, target: x86_64-pc-windows-msvc,    platform: win32-x64-msvc,  ext: '.exe', use_cross: 'false' }
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO_TARGET: ${{ matrix.target }}
+      CLI_PLATFORM: ${{ matrix.platform }}
+      CLI_EXT: ${{ matrix.ext }}
+      USE_CROSS: ${{ matrix.use_cross }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: cli-${{ matrix.target }}
+      - name: Install cross
+        if: matrix.use_cross == 'true'
+        run: cargo install cross --locked --version 0.2.5
+      - name: Build CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$USE_CROSS" = "true" ]; then
+            cross build --release -p elsa-mermaid-cli --target "$CARGO_TARGET"
+          else
+            cargo build --release -p elsa-mermaid-cli --target "$CARGO_TARGET"
+          fi
+      - name: Stage binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          out_dir="staging/cli-${CLI_PLATFORM}"
+          mkdir -p "$out_dir"
+          cp "target/${CARGO_TARGET}/release/elsa-to-mermaid${CLI_EXT}" "$out_dir/"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.platform }}
+          path: staging/cli-${{ matrix.platform }}
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # WASM: bundler + node builds. Compiled once, consumed by the npm publish
+  # job and the VS Code extension build.
+  # ---------------------------------------------------------------------------
+  build-wasm:
+    name: wasm (bundler + node)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: wasm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install wasm-bindgen-cli
+        run: cargo install wasm-bindgen-cli --version 0.2.121 --locked
+      - name: Build WASM
+        run: make wasm wasm-node
+      - name: Build TypeScript + smoke
+        working-directory: packages/elsa-to-mermaid
+        run: |
+          npm install
+          npm run build:ts
+          npm run smoke
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-elsa-to-mermaid
+          path: |
+            packages/elsa-to-mermaid/dist
+            packages/elsa-to-mermaid/wasm
+            packages/elsa-to-mermaid/wasm-node
+            packages/elsa-to-mermaid/package.json
+            packages/elsa-to-mermaid/README.md
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # VS Code extension VSIX.
+  # ---------------------------------------------------------------------------
+  build-vscode:
+    name: vscode extension
+    needs: [build-wasm]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-elsa-to-mermaid
+          path: packages/elsa-to-mermaid
+      - name: Build + package
+        working-directory: apps/vscode-extension
+        run: |
+          npm install
+          npm run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vscode-extension
+          path: apps/vscode-extension/*.vsix
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Publish: per-platform CLI npm subpackages.
+  # ---------------------------------------------------------------------------
+  publish-cli-platform-packages:
+    name: publish cli platform packages
+    needs: [build-cli]
+    runs-on: ubuntu-22.04
+    permissions:
+      id-token: write   # npm provenance
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cli-*
+          path: artifacts
+      - name: Stage subpackages
+        run: node scripts/build-cli-npm-packages.mjs
+      - name: Publish each platform package
+        if: env.DRY_RUN != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          for dir in dist/cli-npm/*/; do
+            echo "publishing $dir"
+            (cd "$dir" && npm publish --provenance --access public)
+          done
+
+  # ---------------------------------------------------------------------------
+  # Publish: CLI wrapper. Runs after the platform packages so optionalDeps resolve.
+  # ---------------------------------------------------------------------------
+  publish-cli-wrapper:
+    name: publish elsa-to-mermaid-cli wrapper
+    needs: [publish-cli-platform-packages]
+    runs-on: ubuntu-22.04
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Publish wrapper
+        if: env.DRY_RUN != 'true'
+        working-directory: packages/elsa-to-mermaid-cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+
+  # ---------------------------------------------------------------------------
+  # Publish: elsa-to-mermaid (WASM/JS package).
+  # ---------------------------------------------------------------------------
+  publish-npm-wasm:
+    name: publish elsa-to-mermaid (wasm)
+    needs: [build-wasm]
+    runs-on: ubuntu-22.04
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-elsa-to-mermaid
+          path: packages/elsa-to-mermaid
+      - name: Publish
+        if: env.DRY_RUN != 'true'
+        working-directory: packages/elsa-to-mermaid
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+
+  # ---------------------------------------------------------------------------
+  # Publish: crates.io. Core must be indexed before the CLI can publish, so a
+  # short sleep between the two.
+  # ---------------------------------------------------------------------------
+  publish-crates:
+    name: publish crates.io
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Publish elsa_mermaid
+        if: env.DRY_RUN != 'true'
+        working-directory: crates/elsa_mermaid
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish
+      - name: Wait for crates.io index
+        if: env.DRY_RUN != 'true'
+        run: sleep 60
+      - name: Publish elsa-mermaid-cli
+        if: env.DRY_RUN != 'true'
+        working-directory: crates/elsa_mermaid_cli
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish
+
+  # ---------------------------------------------------------------------------
+  # Publish: VS Code Marketplace + Open VSX.
+  # ---------------------------------------------------------------------------
+  publish-vscode:
+    name: publish vsix
+    needs: [build-vscode]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/download-artifact@v4
+        with:
+          name: vscode-extension
+          path: vsix
+      - name: Resolve vsix path
+        id: vsix
+        shell: bash
+        run: |
+          set -euo pipefail
+          path=$(ls vsix/*.vsix | head -n1)
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+      - name: Publish to VS Code Marketplace
+        if: env.DRY_RUN != 'true'
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          VSIX_PATH: ${{ steps.vsix.outputs.path }}
+        run: npx --yes @vscode/vsce publish --packagePath "$VSIX_PATH" --pat "$VSCE_PAT"
+      - name: Publish to Open VSX
+        if: env.DRY_RUN != 'true'
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+          VSIX_PATH: ${{ steps.vsix.outputs.path }}
+        run: npx --yes ovsx publish "$VSIX_PATH" --pat "$OVSX_PAT"
+
+  # ---------------------------------------------------------------------------
+  # GitHub Release: collect CLI binaries as tarballs/zips + attach VSIX.
+  # ---------------------------------------------------------------------------
+  github-release:
+    name: github release
+    needs: [build-cli, build-vscode]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cli-*
+          path: artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: vscode-extension
+          path: artifacts/vscode-extension
+      - name: Package release archives
+        shell: bash
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag="${REF_NAME#v}"
+          mkdir -p release
+          for d in artifacts/cli-*/; do
+            platform=$(basename "$d" | sed 's/^cli-//')
+            if [[ "$platform" == win32-* ]]; then
+              (cd "$d" && zip -q -r "../../release/elsa-to-mermaid-${tag}-${platform}.zip" .)
+            else
+              tar -C "$d" -czf "release/elsa-to-mermaid-${tag}-${platform}.tar.gz" .
+            fi
+          done
+          cp artifacts/vscode-extension/*.vsix release/ || true
+          ls -la release/
+      - uses: softprops/action-gh-release@v2
+        if: env.DRY_RUN != 'true'
+        with:
+          files: release/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true

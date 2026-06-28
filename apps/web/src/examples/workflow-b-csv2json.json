@@ -1,0 +1,106 @@
+{
+  "id": "workflow-b-csv2json",
+  "definitionId": "workflow-b-csv2json",
+  "name": "Workflow B — CSV → JSON",
+  "version": 1,
+  "isPublished": true,
+  "isLatest": true,
+  "inputs": [
+    {
+      "name": "csvBase64",
+      "type": "string",
+      "description": "Base64-encoded CSV payload passed in by the caller."
+    }
+  ],
+  "outputs": [
+    { "name": "rows", "type": "object[]" },
+    { "name": "error", "type": "string" }
+  ],
+  "root": {
+    "id": "Flowchart1",
+    "type": "Elsa.Flowchart",
+    "activities": [
+      {
+        "id": "Start1",
+        "type": "Elsa.Start",
+        "displayName": "Start (CSV2JSON)",
+        "description": "Subworkflow entry. Expects `csvBase64` in the input bag."
+      },
+      {
+        "id": "Decode1",
+        "type": "Elsa.Primitives.Base64Decode",
+        "displayName": "Base64-decode",
+        "properties": {
+          "Input": { "type": "JavaScript", "value": "input.csvBase64" },
+          "Output": { "type": "Literal", "value": "csvText" }
+        }
+      },
+      {
+        "id": "TryParse1",
+        "type": "Elsa.Primitives.TryCatch",
+        "displayName": "Try parse",
+        "activities": [
+          {
+            "id": "Parse1",
+            "type": "Elsa.Data.ParseCsv",
+            "displayName": "Parse CSV",
+            "properties": {
+              "Input": { "type": "JavaScript", "value": "csvText" },
+              "HasHeaders": { "type": "Literal", "value": true },
+              "Delimiter": { "type": "Literal", "value": "," },
+              "Output": { "type": "Literal", "value": "rows" }
+            }
+          }
+        ]
+      },
+      {
+        "id": "If1",
+        "type": "Elsa.If",
+        "displayName": "Got rows?",
+        "properties": {
+          "Condition": {
+            "type": "JavaScript",
+            "value": "Array.isArray(rows) && rows.length > 0"
+          }
+        }
+      },
+      {
+        "id": "SetOk1",
+        "type": "Elsa.Primitives.SetOutput",
+        "displayName": "Emit rows",
+        "properties": {
+          "Outputs": {
+            "type": "JavaScript",
+            "value": "{ rows, error: null }"
+          }
+        }
+      },
+      {
+        "id": "SetFail1",
+        "type": "Elsa.Primitives.SetOutput",
+        "displayName": "Emit parse error",
+        "properties": {
+          "Outputs": {
+            "type": "JavaScript",
+            "value": "{ rows: [], error: error?.message ?? 'CSV produced no rows' }"
+          }
+        }
+      },
+      {
+        "id": "Finish1",
+        "type": "Elsa.Finish",
+        "displayName": "Return"
+      }
+    ],
+    "connections": [
+      { "source": "Start1", "target": "Decode1", "sourcePort": "Done", "targetPort": "In" },
+      { "source": "Decode1", "target": "TryParse1", "sourcePort": "Done", "targetPort": "In" },
+      { "source": "TryParse1", "target": "If1", "sourcePort": "Done", "targetPort": "In" },
+      { "source": "TryParse1", "target": "SetFail1", "sourcePort": "Catch", "targetPort": "In" },
+      { "source": "If1", "target": "SetOk1", "sourcePort": "True", "targetPort": "In" },
+      { "source": "If1", "target": "SetFail1", "sourcePort": "False", "targetPort": "In" },
+      { "source": "SetOk1", "target": "Finish1", "sourcePort": "Done", "targetPort": "In" },
+      { "source": "SetFail1", "target": "Finish1", "sourcePort": "Done", "targetPort": "In" }
+    ]
+  }
+}

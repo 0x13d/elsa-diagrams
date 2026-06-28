@@ -1,0 +1,13 @@
+/target
+**/*.rs.bk
+Cargo.lock
+
+# wasm-pack output
+packages/elsa-to-mermaid/wasm/
+packages/elsa-to-mermaid/dist/
+
+# Node
+node_modules/
+
+# OS
+.DS_Store

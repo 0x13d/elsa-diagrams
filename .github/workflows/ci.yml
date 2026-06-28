@@ -1,0 +1,95 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: cargo test
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+        continue-on-error: true
+      - run: cargo test --workspace
+      - run: cargo build --release -p elsa-mermaid-cli
+
+  wasm-smoke:
+    name: wasm + npm smoke
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: wasm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install wasm-bindgen-cli
+        run: cargo install wasm-bindgen-cli --version 0.2.121 --locked
+      - run: make wasm wasm-node
+      - name: TS build + smoke
+        working-directory: packages/elsa-to-mermaid
+        run: |
+          npm install
+          npm run build:ts
+          npm run smoke
+
+  vscode-extension:
+    name: vscode build
+    needs: [wasm-smoke]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: wasm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: cargo install wasm-bindgen-cli --version 0.2.121 --locked
+      - run: make wasm-node
+      - working-directory: apps/vscode-extension
+        run: |
+          npm install
+          npm run build
+
+  web:
+    name: web build
+    needs: [wasm-smoke]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: wasm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: cargo install wasm-bindgen-cli --version 0.2.121 --locked
+      - run: make wasm
+      - working-directory: packages/elsa-to-mermaid
+        run: |
+          npm install
+          npm run build:ts
+      - working-directory: apps/web
+        run: |
+          npm install
+          npm run build

@@ -1,0 +1,51 @@
+{
+  "name": "elsa-to-mermaid",
+  "version": "0.4.0",
+  "description": "Convert Elsa Workflow JSON definitions (v2.x and v3+) into Mermaid flowchart diagrams. Rust core compiled to WebAssembly, runs offline in Node and the browser.",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "author": "Ari Ugwu <ari@thirteendelta.com>",
+  "homepage": "https://github.com/0x13d/elsa-diagrams#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0x13d/elsa-diagrams.git",
+    "directory": "packages/elsa-to-mermaid"
+  },
+  "bugs": {
+    "url": "https://github.com/0x13d/elsa-diagrams/issues"
+  },
+  "keywords": [
+    "elsa",
+    "elsa-workflows",
+    "workflow",
+    "mermaid",
+    "flowchart",
+    "diagram",
+    "wasm"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "node": "./dist/index.node.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "wasm",
+    "wasm-node",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "scripts": {
+    "build:wasm": "cd ../.. && make wasm wasm-node",
+    "build:ts": "tsc",
+    "build": "npm run build:wasm && npm run build:ts",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

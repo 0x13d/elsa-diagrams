@@ -1,0 +1,71 @@
+{
+  "id": "workflow-1",
+  "definitionId": "workflow-1",
+  "name": "Document Approval",
+  "version": 1,
+  "isPublished": true,
+  "isLatest": true,
+  "root": {
+    "id": "Flowchart1",
+    "type": "Elsa.Flowchart",
+    "activities": [
+      {
+        "id": "HttpEndpoint1",
+        "type": "Elsa.Http.HttpEndpoint",
+        "displayName": "Receive Document",
+        "properties": {}
+      },
+      {
+        "id": "If1",
+        "type": "Elsa.If",
+        "displayName": "Check Approval",
+        "properties": {}
+      },
+      {
+        "id": "Sequence1",
+        "type": "Elsa.Sequence",
+        "displayName": "Approval Path",
+        "activities": [
+          {
+            "id": "Email1",
+            "type": "Elsa.Email.SendEmail",
+            "displayName": "Notify Approver",
+            "properties": {}
+          },
+          {
+            "id": "Signal1",
+            "type": "Elsa.Primitives.SignalReceived",
+            "displayName": "Wait for Decision",
+            "properties": {}
+          }
+        ]
+      },
+      {
+        "id": "HttpResponse1",
+        "type": "Elsa.Http.WriteHttpResponse",
+        "displayName": "Send Rejection",
+        "properties": {}
+      }
+    ],
+    "connections": [
+      {
+        "source": "HttpEndpoint1",
+        "target": "If1",
+        "sourcePort": "Done",
+        "targetPort": "In"
+      },
+      {
+        "source": "If1",
+        "target": "Sequence1",
+        "sourcePort": "True",
+        "targetPort": "In"
+      },
+      {
+        "source": "If1",
+        "target": "HttpResponse1",
+        "sourcePort": "False",
+        "targetPort": "In"
+      }
+    ]
+  }
+}

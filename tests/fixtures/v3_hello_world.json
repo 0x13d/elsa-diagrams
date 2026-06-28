@@ -1,0 +1,19 @@
+{
+  "id": "1",
+  "definitionId": "1",
+  "name": "Hello World",
+  "version": 1,
+  "root": {
+    "id": "Flowchart1",
+    "type": "Elsa.Flowchart",
+    "activities": [
+      {
+        "id": "WriteLine1",
+        "type": "Elsa.WriteLine",
+        "displayName": "Say Hello",
+        "properties": {}
+      }
+    ],
+    "connections": []
+  }
+}

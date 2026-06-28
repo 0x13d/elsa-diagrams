@@ -1,0 +1,104 @@
+{
+  "id": "workflow-a-filewatcher",
+  "definitionId": "workflow-a-filewatcher",
+  "name": "Workflow A — File Watcher (CSV)",
+  "version": 1,
+  "isPublished": true,
+  "isLatest": true,
+  "root": {
+    "id": "Flowchart1",
+    "type": "Elsa.Flowchart",
+    "activities": [
+      {
+        "id": "WatchTrigger1",
+        "type": "Elsa.FileSystem.WatchDirectoryTrigger",
+        "displayName": "Watch CSV Drop Folder",
+        "description": "Fires for every *.csv file written into the watched directory.",
+        "properties": {
+          "Path": { "type": "Literal", "value": "/var/data/inbox" },
+          "Pattern": { "type": "Literal", "value": "*.csv" },
+          "IncludeSubdirectories": { "type": "Literal", "value": false }
+        }
+      },
+      {
+        "id": "ReadFile1",
+        "type": "Elsa.FileSystem.ReadFile",
+        "displayName": "Read CSV bytes",
+        "properties": {
+          "Path": { "type": "JavaScript", "value": "trigger.fullPath" },
+          "Output": { "type": "Literal", "value": "rawBytes" }
+        }
+      },
+      {
+        "id": "Encode1",
+        "type": "Elsa.Primitives.Base64Encode",
+        "displayName": "Base64-encode payload",
+        "properties": {
+          "Input": { "type": "JavaScript", "value": "rawBytes" },
+          "Output": { "type": "Literal", "value": "csvBase64" }
+        }
+      },
+      {
+        "id": "RunB1",
+        "type": "Elsa.Workflows.RunWorkflow",
+        "displayName": "Run Workflow B (CSV2JSON)",
+        "description": "Hands the base64 CSV to Workflow B and waits for the JSON array.",
+        "properties": {
+          "WorkflowDefinitionId": { "type": "Literal", "value": "workflow-b-csv2json" },
+          "Input": { "type": "JavaScript", "value": "{ csvBase64 }" },
+          "Output": { "type": "Literal", "value": "parsed" }
+        }
+      },
+      {
+        "id": "If1",
+        "type": "Elsa.If",
+        "displayName": "Parsed OK?",
+        "properties": {
+          "Condition": {
+            "type": "JavaScript",
+            "value": "parsed && Array.isArray(parsed.rows) && parsed.rows.length > 0"
+          }
+        }
+      },
+      {
+        "id": "RunC_OK",
+        "type": "Elsa.Workflows.RunWorkflow",
+        "displayName": "Audit: success",
+        "properties": {
+          "WorkflowDefinitionId": { "type": "Literal", "value": "workflow-c-audit" },
+          "Input": {
+            "type": "JavaScript",
+            "value": "{ source: 'workflow-a-filewatcher', status: 'ok', count: parsed.rows.length, ref: trigger.fullPath }"
+          }
+        }
+      },
+      {
+        "id": "RunC_FAIL",
+        "type": "Elsa.Workflows.RunWorkflow",
+        "displayName": "Audit: failed",
+        "properties": {
+          "WorkflowDefinitionId": { "type": "Literal", "value": "workflow-c-audit" },
+          "Input": {
+            "type": "JavaScript",
+            "value": "{ source: 'workflow-a-filewatcher', status: 'failed', error: parsed?.error ?? 'no rows', ref: trigger.fullPath }"
+          }
+        }
+      },
+      {
+        "id": "Finish1",
+        "type": "Elsa.Finish",
+        "displayName": "Done"
+      }
+    ],
+    "connections": [
+      { "source": "WatchTrigger1", "target": "ReadFile1", "sourcePort": "Done", "targetPort": "In" },
+      { "source": "ReadFile1", "target": "Encode1", "sourcePort": "Done", "targetPort": "In" },
+      { "source": "Encode1", "target": "RunB1", "sourcePort": "Done", "targetPort": "In" },
+      { "source": "RunB1", "target": "If1", "sourcePort": "Done", "targetPort": "In" },
+      { "source": "If1", "target": "RunC_OK", "sourcePort": "True", "targetPort": "In" },
+      { "source": "If1", "target": "RunC_FAIL", "sourcePort": "False", "targetPort": "In" },
+      { "source": "RunC_OK", "target": "Finish1", "sourcePort": "Done", "targetPort": "In" },
+      { "source": "RunC_FAIL", "target": "Finish1", "sourcePort": "Done", "targetPort": "In" }
+    ]
+  }
+}
